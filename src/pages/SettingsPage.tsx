@@ -1,27 +1,27 @@
 import { Link } from "react-router-dom";
 import {
   Coins,
-  Gauge,
   Megaphone,
   Ticket,
   Star,
   Settings2,
   FileText,
   CreditCard,
+  Cpu,
 } from "lucide-react";
 
 const cards = [
   {
-    to: "/credits",
-    title: "Credit allowances",
-    desc: "Set Free / Trial / Pro / Elite credit budgets (e.g. Free daily 500).",
-    icon: Coins,
+    to: "/ai-configs",
+    title: "AI model configs",
+    desc: "Map each pipeline role to a provider + model (proposers, aggregator, free tier, image).",
+    icon: Cpu,
   },
   {
-    to: "/quotas",
-    title: "Quota & image limits",
-    desc: "Daily token, regenerate, and image generation caps per tier.",
-    icon: Gauge,
+    to: "/credits",
+    title: "Credit allowances",
+    desc: "Only usage gate — chat, generate, and images (40 credits / image) all spend from here.",
+    icon: Coins,
   },
   {
     to: "/promos",
@@ -63,7 +63,7 @@ export default function SettingsPage() {
         <h1 className="text-lg font-semibold sm:text-xl">Settings</h1>
       </div>
       <p className="text-sm text-admin-muted">
-        v1.5 admin tools — credits, quotas, promos, reviews, broadcasts, and site CMS.
+        Admin tools — credits gate all AI usage (chat + images). Quotas are retired.
       </p>
 
       <div className="mt-6 grid gap-4 sm:mt-8 sm:grid-cols-2">

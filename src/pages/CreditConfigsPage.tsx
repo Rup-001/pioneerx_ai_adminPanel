@@ -13,6 +13,7 @@ type Draft = {
   monthlyCredits: string;
   dailyCredits: string;
   trialCredits: string;
+  dailyImageLimit: string;
 };
 
 function toDraft(c: CreditConfig): Draft {
@@ -20,6 +21,8 @@ function toDraft(c: CreditConfig): Draft {
     monthlyCredits: c.monthlyCredits == null ? "" : String(c.monthlyCredits),
     dailyCredits: c.dailyCredits == null ? "" : String(c.dailyCredits),
     trialCredits: c.trialCredits == null ? "" : String(c.trialCredits),
+    dailyImageLimit:
+      c.dailyImageLimit == null ? "" : String(c.dailyImageLimit),
   };
 }
 
@@ -28,7 +31,7 @@ function parseOptionalInt(value: string): number | null {
   if (t === "") return null;
   const n = Number(t);
   if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-    throw new Error("Credits must be a whole number ≥ 0 (or empty for none)");
+    throw new Error("Values must be a whole number ≥ 0 (or empty for none/unlimited)");
   }
   return n;
 }
@@ -82,12 +85,13 @@ export default function CreditConfigsPage() {
         monthlyCredits: parseOptionalInt(draft.monthlyCredits),
         dailyCredits: parseOptionalInt(draft.dailyCredits),
         trialCredits: parseOptionalInt(draft.trialCredits),
+        dailyImageLimit: parseOptionalInt(draft.dailyImageLimit),
       };
       const updated = await adminApi.updateCreditConfig(row.id, body);
       setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
       setDrafts((prev) => ({ ...prev, [row.id]: toDraft(updated) }));
       setSuccess(
-        `${row.tier} credits updated. Takes effect on the next reset cycle (not mid-cycle for existing balances).`,
+        `${row.tier} updated. Credit budgets apply on next reset; image daily limit applies immediately.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -99,7 +103,7 @@ export default function CreditConfigsPage() {
   return (
     <PageShell
       title="Credit allowances"
-      subtitle="Set how many credits each plan gets. Example: Free daily = 500 — change anytime from here."
+      subtitle="Usage gate for chat/generate (credits) + daily image cap. Each image also costs 40 credits."
     >
       <StatusBanner error={error} success={success} />
 
@@ -134,7 +138,7 @@ export default function CreditConfigsPage() {
                 </button>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <FieldLabel>Daily credits (Free)</FieldLabel>
                   <input
@@ -180,9 +184,28 @@ export default function CreditConfigsPage() {
                     }
                   />
                 </div>
+                <div>
+                  <FieldLabel>Daily image limit</FieldLabel>
+                  <input
+                    className={inputClass}
+                    inputMode="numeric"
+                    placeholder="empty = unlimited"
+                    value={draft.dailyImageLimit}
+                    onChange={(e) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [row.id]: {
+                          ...draft,
+                          dailyImageLimit: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </div>
               </div>
               <p className="mt-2 text-[11px] text-admin-muted">
-                Leave a field empty to clear (null). Typical: FREE fills Daily + Trial; PRO / PRO_PLUS / ELITE fill Monthly.
+                Leave empty for null. Image limit = max images/day (still needs
+                40 credits each). Typical: FREE 3, PRO 10, PRO_PLUS 20, ELITE 30.
               </p>
             </div>
           );

@@ -88,6 +88,7 @@ export interface CreditConfig {
   monthlyCredits: number | null;
   dailyCredits: number | null;
   trialCredits: number | null;
+  dailyImageLimit?: number | null;
   updatedAt?: string;
 }
 
@@ -139,6 +140,7 @@ export interface StripePrice {
   interval: string;
   label: string | null;
   amount: number | null;
+  compareAtAmount?: number | null;
   currency: string;
   isActive: boolean;
   createdAt?: string;
@@ -166,6 +168,15 @@ export interface PaginatedPayments {
     limit: number;
     totalPages: number;
   };
+}
+
+export interface AiModelConfig {
+  id: string;
+  role: string;
+  provider: string;
+  modelId: string;
+  isActive: boolean;
+  updatedAt?: string;
 }
 
 export interface ApiResponse<T> {

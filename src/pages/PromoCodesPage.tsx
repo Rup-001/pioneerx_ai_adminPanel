@@ -8,6 +8,7 @@ import {
   inputClass,
   btnPrimary,
   btnGhost,
+  btnDanger,
 } from "@/components/ui/PageShell";
 
 export default function PromoCodesPage() {
@@ -16,6 +17,7 @@ export default function PromoCodesPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     code: "",
     trialDays: "30",
@@ -73,10 +75,30 @@ export default function PromoCodesPage() {
   async function toggleActive(row: PromoCode) {
     try {
       setError("");
+      setSuccess("");
       await adminApi.updatePromoCode(row.id, { isActive: !row.isActive });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
+    }
+  }
+
+  async function removePromo(row: PromoCode) {
+    const ok = window.confirm(
+      `Delete promo code "${row.code}"? This cannot be undone.`,
+    );
+    if (!ok) return;
+    try {
+      setDeletingId(row.id);
+      setError("");
+      setSuccess("");
+      await adminApi.deletePromoCode(row.id);
+      setSuccess(`Promo code "${row.code}" deleted.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -180,13 +202,23 @@ export default function PromoCodesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      className={btnGhost}
-                      onClick={() => toggleActive(row)}
-                    >
-                      {row.isActive ? "Disable" : "Enable"}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className={btnGhost}
+                        onClick={() => toggleActive(row)}
+                      >
+                        {row.isActive ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        type="button"
+                        className={btnDanger}
+                        disabled={deletingId === row.id}
+                        onClick={() => removePromo(row)}
+                      >
+                        {deletingId === row.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

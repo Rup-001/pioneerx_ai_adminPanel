@@ -69,3 +69,6 @@ export const btnPrimary =
 
 export const btnGhost =
   "rounded-lg border border-admin-border px-3 py-1.5 text-xs font-medium text-admin-muted hover:text-white hover:bg-white/5 disabled:opacity-50";
+
+export const btnDanger =
+  "rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-50";

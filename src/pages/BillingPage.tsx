@@ -19,22 +19,50 @@ const emptyForm = {
   interval: "month",
   label: "",
   amount: "",
+  compareAtAmount: "",
   currency: "usd",
 };
 
-function formatAmount(amount: number | null, currency: string) {
+function formatAmount(amount: number | null | undefined, currency: string) {
   if (amount === null || amount === undefined) return "—";
   return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`;
+}
+
+function parseCents(value: string): number | undefined {
+  const t = value.trim();
+  if (!t) return undefined;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+    throw new Error("Amounts must be whole cents (e.g. 1499 = $14.99)");
+  }
+  return n;
 }
 
 export default function BillingPage() {
   const [prices, setPrices] = useState<StripePrice[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [drafts, setDrafts] = useState<
+    Record<string, { amount: string; compareAtAmount: string }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  function syncDrafts(list: StripePrice[]) {
+    const next: Record<string, { amount: string; compareAtAmount: string }> =
+      {};
+    list.forEach((p) => {
+      next[p.id] = {
+        amount: p.amount == null ? "" : String(p.amount),
+        compareAtAmount:
+          p.compareAtAmount == null ? "" : String(p.compareAtAmount),
+      };
+    });
+    setDrafts(next);
+  }
 
   async function load() {
     try {
@@ -44,7 +72,9 @@ export default function BillingPage() {
         adminApi.getStripePrices(),
         adminApi.getPayments(1, 20).catch(() => null),
       ]);
-      setPrices(Array.isArray(priceList) ? priceList : []);
+      const list = Array.isArray(priceList) ? priceList : [];
+      setPrices(list);
+      syncDrafts(list);
       setPayments(paymentPage?.data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load billing data");
@@ -67,21 +97,56 @@ export default function BillingPage() {
       setSaving(true);
       setError("");
       setSuccess("");
+      const amount = parseCents(form.amount);
+      const compareAtAmount = parseCents(form.compareAtAmount);
       const created = await adminApi.createStripePrice({
         priceId: form.priceId.trim(),
         tier: form.tier,
         interval: form.interval,
         label: form.label.trim() || undefined,
-        amount: form.amount ? Number(form.amount) : undefined,
+        amount,
+        compareAtAmount: compareAtAmount ?? null,
         currency: form.currency.trim() || "usd",
       });
-      setPrices((prev) => [...prev, created]);
+      setPrices((prev) => {
+        const next = [...prev, created];
+        syncDrafts(next);
+        return next;
+      });
       setForm(emptyForm);
       setSuccess(`Mapped ${created.priceId} → ${created.tier}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add price");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveDisplayAmounts(price: StripePrice) {
+    const draft = drafts[price.id];
+    if (!draft) return;
+    try {
+      setSavingId(price.id);
+      setError("");
+      setSuccess("");
+      const amount = parseCents(draft.amount);
+      const compareRaw = draft.compareAtAmount.trim();
+      const compareAtAmount =
+        compareRaw === "" ? null : parseCents(compareRaw) ?? null;
+      const updated = await adminApi.updateStripePrice(price.id, {
+        amount: amount ?? undefined,
+        compareAtAmount,
+      });
+      setPrices((prev) => {
+        const next = prev.map((p) => (p.id === updated.id ? updated : p));
+        syncDrafts(next);
+        return next;
+      });
+      setSuccess(`Updated display prices for ${updated.tier}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -102,7 +167,11 @@ export default function BillingPage() {
     try {
       setError("");
       await adminApi.deleteStripePrice(price.id);
-      setPrices((prev) => prev.filter((p) => p.id !== price.id));
+      setPrices((prev) => {
+        const next = prev.filter((p) => p.id !== price.id);
+        syncDrafts(next);
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -111,7 +180,7 @@ export default function BillingPage() {
   return (
     <PageShell
       title="Billing (Stripe)"
-      subtitle="Map Stripe prices to tiers for website checkout. Mobile purchases still go through RevenueCat."
+      subtitle="Map Stripe prices to tiers. Amount = sale price; Compare-at = crossed-out price on the website."
       actions={
         <button type="button" className={btnGhost} onClick={load}>
           Refresh
@@ -122,8 +191,8 @@ export default function BillingPage() {
 
       <div className="rounded-xl border border-admin-border bg-admin-panel p-4">
         <h2 className="mb-3 text-sm font-semibold">Add a price mapping</h2>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-          <div className="lg:col-span-2">
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          <div className="xl:col-span-2">
             <FieldLabel>Stripe price id</FieldLabel>
             <input
               className={inputClass}
@@ -170,6 +239,17 @@ export default function BillingPage() {
             />
           </div>
           <div>
+            <FieldLabel>Compare-at (cents)</FieldLabel>
+            <input
+              className={inputClass}
+              placeholder="2099"
+              value={form.compareAtAmount}
+              onChange={(e) =>
+                setForm({ ...form, compareAtAmount: e.target.value })
+              }
+            />
+          </div>
+          <div>
             <FieldLabel>Label</FieldLabel>
             <input
               className={inputClass}
@@ -179,6 +259,11 @@ export default function BillingPage() {
             />
           </div>
         </div>
+        <p className="mt-2 text-xs text-admin-muted">
+          Example: amount <code>1499</code> ($14.99) + compare-at{" "}
+          <code>2099</code> ($20.99) → website shows $14.99 with $20.99
+          crossed out.
+        </p>
         <button
           type="button"
           className={`${btnPrimary} mt-4`}
@@ -206,55 +291,110 @@ export default function BillingPage() {
                   <th className="px-4 py-3">Price id</th>
                   <th className="px-4 py-3">Tier</th>
                   <th className="px-4 py-3">Interval</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Label</th>
+                  <th className="px-4 py-3">Amount ¢</th>
+                  <th className="px-4 py-3">Compare-at ¢</th>
+                  <th className="px-4 py-3">Preview</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
-                {prices.map((p) => (
-                  <tr key={p.id} className="border-t border-admin-border">
-                    <td className="px-4 py-3 font-mono text-xs">{p.priceId}</td>
-                    <td className="px-4 py-3">{p.tier}</td>
-                    <td className="px-4 py-3">{p.interval}</td>
-                    <td className="px-4 py-3">
-                      {formatAmount(p.amount, p.currency)}
-                    </td>
-                    <td className="px-4 py-3 text-admin-muted">
-                      {p.label || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          p.isActive
-                            ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"
-                            : "rounded-full bg-white/10 px-2 py-0.5 text-xs text-admin-muted"
-                        }
-                      >
-                        {p.isActive ? "active" : "disabled"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          className={btnGhost}
-                          onClick={() => toggleActive(p)}
+                {prices.map((p) => {
+                  const draft = drafts[p.id] || {
+                    amount: "",
+                    compareAtAmount: "",
+                  };
+                  return (
+                    <tr key={p.id} className="border-t border-admin-border">
+                      <td className="px-4 py-3 font-mono text-xs">{p.priceId}</td>
+                      <td className="px-4 py-3">{p.tier}</td>
+                      <td className="px-4 py-3">{p.interval}</td>
+                      <td className="px-4 py-3">
+                        <input
+                          className={`${inputClass} w-24`}
+                          value={draft.amount}
+                          onChange={(e) =>
+                            setDrafts((prev) => ({
+                              ...prev,
+                              [p.id]: {
+                                ...draft,
+                                amount: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <input
+                          className={`${inputClass} w-24`}
+                          value={draft.compareAtAmount}
+                          onChange={(e) =>
+                            setDrafts((prev) => ({
+                              ...prev,
+                              [p.id]: {
+                                ...draft,
+                                compareAtAmount: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className="font-medium">
+                          {formatAmount(
+                            draft.amount ? Number(draft.amount) : null,
+                            p.currency,
+                          )}
+                        </span>
+                        {draft.compareAtAmount.trim() !== "" && (
+                          <span className="ml-2 text-admin-muted line-through">
+                            {formatAmount(
+                              Number(draft.compareAtAmount),
+                              p.currency,
+                            )}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={
+                            p.isActive
+                              ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"
+                              : "rounded-full bg-white/10 px-2 py-0.5 text-xs text-admin-muted"
+                          }
                         >
-                          {p.isActive ? "Disable" : "Enable"}
-                        </button>
-                        <button
-                          type="button"
-                          className={btnGhost}
-                          onClick={() => remove(p)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {p.isActive ? "active" : "disabled"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            disabled={savingId === p.id}
+                            onClick={() => saveDisplayAmounts(p)}
+                          >
+                            {savingId === p.id ? "Saving…" : "Save prices"}
+                          </button>
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            onClick={() => toggleActive(p)}
+                          >
+                            {p.isActive ? "Disable" : "Enable"}
+                          </button>
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            onClick={() => remove(p)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

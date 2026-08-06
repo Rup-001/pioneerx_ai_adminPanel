@@ -87,7 +87,7 @@ export const adminApi = {
     body: Partial<
       Pick<
         import("@/types").CreditConfig,
-        "monthlyCredits" | "dailyCredits" | "trialCredits"
+        "monthlyCredits" | "dailyCredits" | "trialCredits" | "dailyImageLimit"
       >
     >,
   ) {
@@ -144,6 +144,12 @@ export const adminApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     });
+  },
+  deletePromoCode(id: string) {
+    return request<{ deleted: boolean; id: string }>(
+      `/admin/promo-codes/${id}`,
+      { method: "DELETE" },
+    );
   },
 
   // Reviews
@@ -211,6 +217,7 @@ export const adminApi = {
     interval?: string;
     label?: string;
     amount?: number;
+    compareAtAmount?: number | null;
     currency?: string;
   }) {
     return request<import("@/types").StripePrice>("/admin/stripe-prices", {
@@ -225,6 +232,7 @@ export const adminApi = {
       interval: string;
       label: string;
       amount: number;
+      compareAtAmount: number | null;
       currency: string;
       isActive: boolean;
     }>,
@@ -241,6 +249,22 @@ export const adminApi = {
   getPayments(page = 1, limit = 20) {
     return request<import("@/types").PaginatedPayments>(
       `/admin/payments?page=${page}&limit=${limit}`,
+    );
+  },
+
+  // AI model role → provider/model mapping
+  getAiConfigs() {
+    return request<import("@/types").AiModelConfig[]>("/admin/ai-configs");
+  },
+  updateAiConfig(
+    id: string,
+    body: Partial<
+      Pick<import("@/types").AiModelConfig, "provider" | "modelId" | "isActive">
+    >,
+  ) {
+    return request<import("@/types").AiModelConfig>(
+      `/admin/ai-configs/${id}`,
+      { method: "PATCH", body: JSON.stringify(body) },
     );
   },
 };

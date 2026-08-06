@@ -6,14 +6,14 @@ import {
   Layers,
   Settings,
   Coins,
-  Gauge,
+  Megaphone,
   Ticket,
   Star,
-  Megaphone,
   FileText,
   CreditCard,
   LogOut,
   X,
+  Cpu,
 } from "lucide-react";
 import { clearAdminToken } from "@/lib/api";
 
@@ -22,7 +22,7 @@ const navItems = [
   { to: "/users", label: "User List", icon: Users },
   { to: "/subscriptions", label: "Subscriptions", icon: Layers },
   { to: "/credits", label: "Credits", icon: Coins },
-  { to: "/quotas", label: "Quotas", icon: Gauge },
+  { to: "/ai-configs", label: "AI Models", icon: Cpu },
   { to: "/promos", label: "Promos", icon: Ticket },
   { to: "/reviews", label: "Reviews", icon: Star },
   { to: "/broadcast", label: "Broadcast", icon: Megaphone },
